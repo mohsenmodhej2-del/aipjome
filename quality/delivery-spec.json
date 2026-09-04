@@ -1,0 +1,23 @@
+{
+  "product": "فروشگاه همه‌چی",
+  "source": "سند تحلیل پیش‌نویس ۱ — فروشگاه چنددسته‌ای با ادمین‌های دامنه‌محور",
+  "releaseRule": "تحویل فقط وقتی پذیرفته است که همهٔ موارد required پاس شوند، هیچ مورد critical رد نشود و موارد manual شاهد انسانی داشته باشند.",
+  "requirements": [
+    { "id": "SEC-01", "section": "۳ و ۱۱", "title": "مسیرهای ادمین بدون نشست قفل هستند", "kind": "http", "severity": "critical", "method": "GET", "path": "/api/admin/summary", "expect": 401 },
+    { "id": "SEC-02", "section": "۱۱", "title": "پرداخت بدون نشست قفل است", "kind": "http", "severity": "critical", "method": "POST", "path": "/api/payments/mock/confirm", "body": { "orderId": "probe" }, "expect": 401 },
+    { "id": "SEC-03", "section": "۱۱", "title": "فاکتور بدون نشست قفل است", "kind": "http", "severity": "critical", "method": "GET", "path": "/api/orders/probe/invoice", "expect": 401 },
+    { "id": "CAT-01", "section": "۲ و ۳", "title": "ویترین عمومی دسته‌ها و کالاهای منتشرشده را نمایش می‌دهد", "kind": "http", "severity": "required", "method": "GET", "path": "/api/catalog", "expect": 200, "assert": "catalog" },
+    { "id": "ORD-01", "section": "۸", "title": "سفارش به مرسوله‌های دسته‌ای تجزیه می‌شود", "kind": "manual", "severity": "required", "evidence": "سناریوی خرید چنددسته‌ای و مشاهدهٔ دو مرسوله در حساب مشتری" },
+    { "id": "ORD-02", "section": "۸", "title": "مدیر کل فهرست کامل سفارش‌ها را می‌بیند", "kind": "auth-http", "severity": "required", "method": "GET", "path": "/api/admin/orders", "expect": 200 },
+    { "id": "INV-01", "section": "۸ و ۱۴", "title": "مشتری یا مدیر کل فاکتور سفارش را می‌بیند و چاپ می‌کند", "kind": "manual", "severity": "required", "evidence": "پرداخت سفارش نمونه و بازکردن مسیر /invoice/:id" },
+    { "id": "ACL-01", "section": "۳ و ۴", "title": "ادمین دسته فقط دادهٔ دامنهٔ خودش را می‌بیند", "kind": "manual", "severity": "critical", "evidence": "آزمون درخواست مستقیم با نشست ادمین پوشاک روی دادهٔ سلامت؛ انتظار ۴۰۴/دادهٔ خالی" },
+    { "id": "ACL-02", "section": "۳٫۱", "title": "مدیر کل در پنل ماتریس انتساب‌ها را می‌بیند و تغییر می‌دهد", "kind": "manual", "severity": "required", "evidence": "ایجاد ادمین، تخصیص چند دسته و بازبینی ماتریس" },
+    { "id": "CAT-02", "section": "۵ و ۶", "title": "attribute_set و اعتبارسنجی ویژگی‌های دسته‌ای", "kind": "manual", "severity": "required", "evidence": "تعریف ویژگی اجباری و رد کالای ناقص" },
+    { "id": "CAT-03", "section": "۵ و ۷", "title": "SKU/variant، قیمت و موجودی به‌ازای گونهٔ کالا", "kind": "manual", "severity": "required", "evidence": "کالای پوشاک با رنگ×سایز و موجودی مستقل" },
+    { "id": "CAT-04", "section": "۷", "title": "چرخهٔ پیش‌نویس، تأیید، انتشار، ناموجود و بایگانی", "kind": "manual", "severity": "required", "evidence": "تغییر وضعیت کالا در پنل و کنترل نمایش ویترین" },
+    { "id": "UX-01", "section": "۱۰", "title": "صفحهٔ جزئیات کالا، URL خوانا و SEO پایه", "kind": "manual", "severity": "required", "evidence": "بازبینی صفحهٔ محصول و متادیتای Product/Offer" },
+    { "id": "CARE-01", "section": "۹ و ۱۳", "title": "مرجوعی، تیکت، پرسش کالا و مسیریابی درخواست", "kind": "manual", "severity": "required", "evidence": "ثبت درخواست مشتری و مشاهدهٔ آن فقط در دامنهٔ درست" },
+    { "id": "OPS-01", "section": "۱۰", "title": "پشتیبان‌گیری و آزمون بازیابی", "kind": "manual", "severity": "critical", "evidence": "گزارش زمان‌دارِ آخرین backup و تست restore" },
+    { "id": "PHARMA-01", "section": "۶ و ۱۳", "title": "دارو فقط پس از مجوز: داروساز، نسخه، IRC و رهگیری", "kind": "decision", "severity": "required", "evidence": "تصمیم کتبی مالک: حذف موقت دارو یا تکمیل پیش‌نیازهای قانونی" }
+  ]
+}

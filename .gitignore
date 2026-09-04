@@ -36,3 +36,4 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+quality/delivery-audit-report.json
