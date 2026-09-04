@@ -38,8 +38,9 @@ for (const requirement of spec.requirements) {
 }
 const failedCritical = results.filter((result) => result.severity === 'critical' && result.status === 'FAIL').length;
 const unresolvedRequired = results.filter((result) => result.severity === 'required' && result.status !== 'PASS').length;
-const report = { generatedAt: new Date().toISOString(), baseUrl, rule: spec.releaseRule, verdict: failedCritical ? 'REJECTED' : unresolvedRequired ? 'INCOMPLETE' : 'READY_FOR_HUMAN_SIGNOFF', summary: { pass: results.filter((result) => result.status === 'PASS').length, fail: results.filter((result) => result.status === 'FAIL').length, manual: results.filter((result) => result.status === 'MANUAL').length, failedCritical, unresolvedRequired }, results };
+const unresolvedCritical = results.filter((result) => result.severity === 'critical' && result.status !== 'PASS').length;
+const report = { generatedAt: new Date().toISOString(), baseUrl, rule: spec.releaseRule, verdict: failedCritical ? 'REJECTED' : unresolvedRequired || unresolvedCritical ? 'INCOMPLETE' : 'READY_FOR_HUMAN_SIGNOFF', summary: { pass: results.filter((result) => result.status === 'PASS').length, fail: results.filter((result) => result.status === 'FAIL').length, manual: results.filter((result) => result.status === 'MANUAL').length, failedCritical, unresolvedRequired, unresolvedCritical }, results };
 await mkdir(dirname(reportPath), { recursive: true });
 await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify(report, null, 2));
-process.exitCode = report.verdict === 'REJECTED' ? 1 : 0;
+process.exitCode = report.verdict === 'READY_FOR_HUMAN_SIGNOFF' ? 0 : 1;
