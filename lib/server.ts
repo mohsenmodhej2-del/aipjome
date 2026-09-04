@@ -145,7 +145,7 @@ export async function requireUser(request: NextRequest) {
 
 export async function categoryScope(user: SessionUser) {
   if (user.role === 'super_admin') return null;
-  const rows = await db().prepare('SELECT categories.id, categories.path FROM assignments JOIN categories ON categories.id = assignments.category_id WHERE assignments.user_id = ? AND assignments.role = ?').bind(user.id, 'category_admin').all<{ id: string; path: string }>();
+  const rows = await db().prepare("SELECT DISTINCT target.id, target.path FROM assignments JOIN categories root ON root.id = assignments.category_id JOIN categories target ON target.path = root.path OR substr(target.path,1,length(root.path)+1) = root.path || '/' WHERE assignments.user_id = ? AND assignments.role = ? AND target.is_archived = 0").bind(user.id, 'category_admin').all<{ id: string; path: string }>();
   return rows.results;
 }
 
