@@ -3,12 +3,13 @@ import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqli
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull(),
+  phone: text('phone'),
   name: text('name').notNull(),
   passwordHash: text('password_hash').notNull(),
   role: text('role', { enum: ['customer', 'super_admin', 'category_admin'] }).notNull().default('customer'),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').notNull(),
-}, (table) => [uniqueIndex('users_email_unique').on(table.email)]);
+}, (table) => [uniqueIndex('users_email_unique').on(table.email), uniqueIndex('users_phone_unique').on(table.phone)]);
 
 export const categories = sqliteTable('categories', {
   id: text('id').primaryKey(),
@@ -49,6 +50,30 @@ export const products = sqliteTable('products', {
   index('idx_products_published').on(table.status),
 ]);
 
+export const attributeSets = sqliteTable('attribute_sets', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  fields: text('fields').notNull(),
+  createdAt: text('created_at').notNull(),
+});
+
+export const productCategories = sqliteTable('product_categories', {
+  productId: text('product_id').notNull().references(() => products.id),
+  categoryId: text('category_id').notNull().references(() => categories.id),
+}, (table) => [uniqueIndex('product_categories_unique').on(table.productId, table.categoryId), index('idx_product_categories_category').on(table.categoryId)]);
+
+export const variants = sqliteTable('variants', {
+  id: text('id').primaryKey(),
+  productId: text('product_id').notNull().references(() => products.id),
+  sku: text('sku').notNull(),
+  barcode: text('barcode'),
+  options: text('options').notNull().default('{}'),
+  price: integer('price').notNull(),
+  compareAtPrice: integer('compare_at_price'),
+  stock: integer('stock').notNull().default(0),
+  reserved: integer('reserved').notNull().default(0),
+}, (table) => [uniqueIndex('variants_sku_unique').on(table.sku), index('idx_variants_product').on(table.productId)]);
+
 export const orders = sqliteTable('orders', {
   id: text('id').primaryKey(),
   customerId: text('customer_id').notNull().references(() => users.id),
@@ -78,6 +103,29 @@ export const fulfillments = sqliteTable('fulfillments', {
   trackingCode: text('tracking_code'),
   createdAt: text('created_at').notNull(),
 }, (table) => [index('idx_fulfillments_category_status').on(table.ownerCategoryId, table.status), index('idx_fulfillments_order_id').on(table.orderId)]);
+
+export const requests = sqliteTable('requests', {
+  id: text('id').primaryKey(),
+  type: text('type', { enum: ['return', 'question', 'restock', 'cancel', 'warranty', 'brand_request'] }).notNull(),
+  customerId: text('customer_id').references(() => users.id),
+  orderId: text('order_id').references(() => orders.id),
+  productId: text('product_id').references(() => products.id),
+  routedCategoryId: text('routed_category_id').references(() => categories.id),
+  status: text('status', { enum: ['open', 'in_progress', 'resolved', 'rejected'] }).notNull().default('open'),
+  message: text('message').notNull(),
+  response: text('response'),
+  assigneeId: text('assignee_id').references(() => users.id),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [index('idx_requests_category_status').on(table.routedCategoryId, table.status), index('idx_requests_customer').on(table.customerId)]);
+
+export const invoices = sqliteTable('invoices', {
+  id: text('id').primaryKey(),
+  orderId: text('order_id').notNull().references(() => orders.id),
+  number: text('number').notNull(),
+  snapshot: text('snapshot').notNull(),
+  issuedAt: text('issued_at').notNull(),
+}, (table) => [uniqueIndex('invoices_order_unique').on(table.orderId), uniqueIndex('invoices_number_unique').on(table.number)]);
 
 export const sessions = sqliteTable('sessions', {
   id: text('id').primaryKey(),
