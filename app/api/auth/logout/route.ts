@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api';
-import { assertSameOrigin, deleteSession } from '@/lib/server';
+import { assertSameOrigin } from '@/modules/core/security';
+import { deleteSession } from '@/modules/identity/service';
 
 export async function POST(request: NextRequest) {
   try {

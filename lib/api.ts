@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { asAppError } from './server';
+import { normalizeError } from '@/modules/core/errors';
 
 export function apiError(error: unknown) {
-  const appError = asAppError(error);
+  const appError = normalizeError(error);
   console.error('API error', appError.status, appError.message);
   return NextResponse.json({ error: appError.message }, { status: appError.status });
 }
