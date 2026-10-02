@@ -89,6 +89,7 @@ CREATE TABLE `products` (
 	`price` integer NOT NULL,
 	`stock` integer DEFAULT 0 NOT NULL,
 	`image_position` text DEFAULT '50% 50%' NOT NULL,
+	`image_url` text,
 	`attributes` text DEFAULT '{}' NOT NULL,
 	`created_by` text NOT NULL,
 	`updated_at` text NOT NULL,

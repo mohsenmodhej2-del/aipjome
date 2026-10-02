@@ -72,7 +72,18 @@ export async function enforceRateLimit(
   maximum: number,
   windowMs: number,
 ) {
-  const key = `${action}:${request.headers.get('cf-connecting-ip') ?? 'local'}`;
+  await enforceKeyRateLimit(
+    `${action}:${request.headers.get('cf-connecting-ip') ?? 'local'}`,
+    maximum,
+    windowMs,
+  );
+}
+
+export async function enforceKeyRateLimit(
+  key: string,
+  maximum: number,
+  windowMs: number,
+) {
   const existing = await database()
     .prepare('SELECT count, reset_at FROM rate_limits WHERE key = ?')
     .bind(key)

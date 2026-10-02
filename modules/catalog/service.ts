@@ -9,14 +9,14 @@ export async function publicCatalog() {
   await ensureSeedData();
   const [categories, products] = await Promise.all([
     database().prepare('SELECT id,name,slug,requires_approval FROM categories WHERE is_archived=0 ORDER BY name').all(),
-    database().prepare("SELECT products.id,products.owner_category_id AS category_id,products.title,products.description,products.price,products.stock,products.image_position,categories.name AS category_name,categories.slug AS category_slug FROM products JOIN categories ON categories.id=products.owner_category_id WHERE products.status='published' AND categories.is_archived=0 ORDER BY products.updated_at DESC").all(),
+    database().prepare("SELECT products.id,products.owner_category_id AS category_id,products.title,products.description,products.price,products.stock,products.image_position,products.image_url,categories.name AS category_name,categories.slug AS category_slug FROM products JOIN categories ON categories.id=products.owner_category_id WHERE products.status='published' AND categories.is_archived=0 ORDER BY products.updated_at DESC").all(),
   ]);
   return { categories: categories.results, products: products.results };
 }
 
 export async function publicProduct(productId: string) {
   await ensureSeedData();
-  const product = await database().prepare("SELECT products.id,products.title,products.description,products.price,products.stock,products.attributes,products.image_position,categories.name AS category_name,categories.slug AS category_slug FROM products JOIN categories ON categories.id=products.owner_category_id WHERE products.id=? AND products.status='published' AND categories.is_archived=0 LIMIT 1").bind(productId).first();
+  const product = await database().prepare("SELECT products.id,products.title,products.description,products.price,products.stock,products.attributes,products.image_position,products.image_url,categories.name AS category_name,categories.slug AS category_slug FROM products JOIN categories ON categories.id=products.owner_category_id WHERE products.id=? AND products.status='published' AND categories.is_archived=0 LIMIT 1").bind(productId).first();
   if (!product) throw new DomainError(404, 'کالا پیدا نشد.');
   const variants = await database().prepare('SELECT id,sku,options,price,compare_at_price,stock FROM variants WHERE product_id=? ORDER BY sku').bind(productId).all();
   return { product, variants: variants.results };

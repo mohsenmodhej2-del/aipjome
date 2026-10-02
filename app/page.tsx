@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   LogIn,
+  Bot,
   Package,
   Plus,
   ShoppingBag,
@@ -37,6 +38,7 @@ type Product = {
   price: number;
   stock: number;
   image_position: string;
+  image_url: string | null;
 };
 type Category = {
   id: string;
@@ -45,6 +47,11 @@ type Category = {
   requires_approval: number;
 };
 type CartLine = Product & { quantity: number };
+type AdvisorMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+  productIds?: string[];
+};
 type Order = {
   id: string;
   payment_status: string;
@@ -70,6 +77,14 @@ type AdminData = {
 };
 const persian = new Intl.NumberFormat('fa-IR');
 const money = (n: number) => `${persian.format(n)} تومان`;
+const individualPhotos = new Set([
+  '/product-images/shirt-men.jpg',
+  '/product-images/trousers-men.jpg',
+  '/product-images/belt-men.jpg',
+  '/product-images/tie-men.jpg',
+  '/product-images/shoes-unisex.jpg',
+  '/product-images/socks-unisex.jpg',
+]);
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const headers = new Headers(options?.headers);
@@ -89,6 +104,7 @@ export default function Home() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('همه');
+  const [recommendedIds, setRecommendedIds] = useState<string[] | null>(null);
   const [mode, setMode] = useState<'shop' | 'orders' | 'admin'>('shop');
   const [notice, setNotice] = useState('');
   const load = async () => {
@@ -101,6 +117,41 @@ export default function Home() {
       ]);
       setUser(session.user);
       setCatalog(nextCatalog);
+      const parameters = new URLSearchParams(window.location.search);
+      const productId = parameters.get('add');
+      const selectedProduct = nextCatalog.products.find(
+        (product) => product.id === productId && product.stock > 0,
+      );
+      if (selectedProduct) {
+        setCart((current) => {
+          const existing = current.find((item) => item.id === selectedProduct.id);
+          return existing
+            ? current.map((item) =>
+                item.id === selectedProduct.id
+                  ? {
+                      ...item,
+                      quantity: Math.min(item.quantity + 1, item.stock),
+                    }
+                  : item,
+              )
+            : [...current, { ...selectedProduct, quantity: 1 }];
+        });
+        setNotice(`${selectedProduct.title} به سبد خرید اضافه شد.`);
+      } else if (parameters.get('payment') === 'success') {
+        const orderId = parameters.get('order');
+        setNotice(
+          orderId
+            ? `پرداخت سفارش ${orderId.slice(0, 8)} با موفقیت ثبت شد.`
+            : 'پرداخت با موفقیت ثبت شد.',
+        );
+      }
+      if (parameters.has('add') || parameters.has('payment')) {
+        parameters.delete('add');
+        parameters.delete('payment');
+        parameters.delete('order');
+        const query = parameters.toString();
+        window.history.replaceState(null, '', query ? `/?${query}` : '/');
+      }
     } catch (e) {
       setNotice(e instanceof Error ? e.message : 'بارگیری انجام نشد.');
     }
@@ -112,10 +163,11 @@ export default function Home() {
     () =>
       catalog.products.filter(
         (item) =>
+          (recommendedIds === null || recommendedIds.includes(item.id)) &&
           (category === 'همه' || item.category_name === category) &&
           `${item.title} ${item.description}`.includes(query.trim()),
       ),
-    [catalog.products, category, query],
+    [catalog.products, category, query, recommendedIds],
   );
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const add = (product: Product) =>
@@ -152,7 +204,7 @@ export default function Home() {
           <div className="hidden flex-1 md:block">
             <Input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => { setRecommendedIds(null); setQuery(e.target.value); }}
               placeholder="جست‌وجوی کالا…"
               className="rounded-2xl bg-white"
             />
@@ -194,6 +246,16 @@ export default function Home() {
           />
         </div>
       </header>
+      <AiAssistant
+        products={catalog.products}
+        onRecommendation={(ids) => {
+          setRecommendedIds(ids);
+          setCategory('همه');
+          setQuery('');
+          setMode('shop');
+          window.setTimeout(() => document.getElementById('store-products')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+        }}
+      />
       {notice && (
         <div className="mx-auto mt-4 max-w-7xl px-4">
           <div className="rounded-2xl bg-[#14332b] px-4 py-3 text-sm text-white">
@@ -208,16 +270,101 @@ export default function Home() {
         <Store
           categories={catalog.categories}
           category={category}
-          setCategory={setCategory}
+          setCategory={(next) => { setRecommendedIds(null); setCategory(next); }}
           query={query}
-          setQuery={setQuery}
+          setQuery={(next) => { setRecommendedIds(null); setQuery(next); }}
           products={products}
+          recommendedIds={recommendedIds}
+          clearRecommendation={() => setRecommendedIds(null)}
           add={add}
         />
       )}{' '}
       {mode === 'orders' && <Orders user={user} />}{' '}
       {mode === 'admin' && <Admin user={user} onError={setNotice} />}
     </main>
+  );
+}
+
+function AiAssistant({ products, onRecommendation }: { products: Product[]; onRecommendation: (ids: string[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const [prompt, setPrompt] = useState('');
+  const [messages, setMessages] = useState<AdvisorMessage[]>([
+    { role: 'assistant', content: 'سلام! من اصغرآقا، مشاور خرید سایت همه‌چی هستم. برای چه مناسبتی دنبال خریدید؟' },
+  ]);
+  const [busy, setBusy] = useState(false);
+  const send = async () => {
+    const text = prompt.trim();
+    if (!text || busy) return;
+    const next = [...messages, { role: 'user' as const, content: text }];
+    setMessages(next);
+    setPrompt('');
+    setBusy(true);
+    try {
+      const response = await request<{ reply: string; kind: 'question' | 'recommendation' | 'out_of_scope'; productIds: string[] }>('/api/ai/chat', {
+        method: 'POST',
+        body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })) }),
+      });
+      const ids = response.kind === 'recommendation' ? response.productIds : [];
+      setMessages((current) => [...current, { role: 'assistant', content: response.reply || 'پاسخی دریافت نشد.', productIds: ids }]);
+      if (response.kind === 'recommendation') onRecommendation(ids);
+    } catch (error) {
+      setMessages((current) => [...current, { role: 'assistant', content: error instanceof Error ? error.message : 'خطا در اتصال.' }]);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      {!open && (
+        <button
+          type="button"
+          className="chat-launcher"
+          aria-label="باز کردن مشاور خرید اصغرآقا"
+          aria-expanded="false"
+          aria-controls="shop-chat-panel"
+          onClick={() => setOpen(true)}
+        >
+          <Bot size={21} aria-hidden="true" />
+          <span>مشاوره با اصغرآقا</span>
+        </button>
+      )}
+      {open && (
+        <section id="shop-chat-panel" className="chat-panel" dir="rtl" aria-label="مشاور خرید اصغرآقا">
+          <div className="chat-panel-header">
+            <span className="chat-panel-icon"><Bot size={20} aria-hidden="true" /></span>
+            <div><strong>اصغرآقا</strong><small>مشاور خرید سایت همه‌چی</small></div>
+            <button type="button" className="chat-panel-close" aria-label="بستن چت" onClick={() => setOpen(false)}>×</button>
+          </div>
+          <div className="chat-messages" role="log" aria-live="polite">
+            {messages.map((message, index) => (
+              <div key={index} className={`chat-message ${message.role === 'user' ? 'is-user' : 'is-assistant'}`}>
+                <span>{message.content}</span>
+                {message.productIds && message.productIds.length > 0 && (
+                  <div className="chat-product-list">
+                    {message.productIds.map((id) => {
+                      const product = products.find((item) => item.id === id);
+                      return product ? <Link key={id} href={`/products/${id}`} className="chat-product-link"><span>{product.title}</span><b>{money(product.price)}</b></Link> : null;
+                    })}
+                    <button type="button" className="chat-show-products" onClick={() => document.getElementById('store-products')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>دیدن پیشنهادها در فروشگاه ←</button>
+                  </div>
+                )}
+              </div>
+            ))}
+            {busy && <p className="chat-message is-assistant">در حال پاسخ دادن…</p>}
+          </div>
+          <form className="chat-composer" onSubmit={(event) => { event.preventDefault(); void send(); }}>
+            <Input
+              value={prompt}
+              maxLength={3000}
+              onChange={(event) => setPrompt(event.target.value)}
+              placeholder="پیامتان را بنویسید…"
+              aria-label="پیام چت"
+            />
+            <Button type="submit" disabled={busy || !prompt.trim()}>ارسال</Button>
+          </form>
+        </section>
+      )}
+    </>
   );
 }
 
@@ -228,6 +375,8 @@ function Store({
   query,
   setQuery,
   products,
+  recommendedIds,
+  clearRecommendation,
   add,
 }: {
   categories: Category[];
@@ -236,6 +385,8 @@ function Store({
   query: string;
   setQuery: (x: string) => void;
   products: Product[];
+  recommendedIds: string[] | null;
+  clearRecommendation: () => void;
   add: (x: Product) => void;
 }) {
   return (
@@ -267,7 +418,13 @@ function Store({
           </p>
         </div>
       </section>
-      <section className="mx-auto max-w-7xl px-4 pb-14 md:px-8">
+      <section id="store-products" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-14 md:px-8">
+        {recommendedIds !== null && (
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#bdd9ca] bg-[#e9f4ed] p-4">
+            <div><strong className="text-[#14332b]">پیشنهادهای اصغرآقا برای شما</strong><p className="mt-1 text-sm text-[#526a5e]">{recommendedIds.length ? `${persian.format(products.length)} محصول متناسب با نیازتان` : 'فعلاً محصول متناسبی در فروشگاه موجود نیست.'}</p></div>
+            <Button type="button" variant="outline" onClick={clearRecommendation}>نمایش همهٔ محصولات</Button>
+          </div>
+        )}
         <div className="mb-5 flex flex-wrap gap-2">
           <Button
             className="rounded-full"
@@ -293,10 +450,18 @@ function Store({
               key={item.id}
               className="overflow-hidden rounded-[1.5rem] border border-[#e8dfd2] bg-white shadow-sm"
             >
-              <div
-                className="h-36 bg-gradient-to-bl from-[#dcebe4] via-[#f4d7ba] to-[#e8a33d]"
-                style={{ backgroundPosition: item.image_position }}
-              />
+              {item.image_url && individualPhotos.has(item.image_url) ? (
+                <img src={item.image_url} alt={item.title} loading="lazy" className="h-36 w-full bg-[#f8f7f4] object-contain" />
+              ) : (
+                <div
+                  className="h-36 bg-gradient-to-bl from-[#dcebe4] via-[#f4d7ba] to-[#e8a33d]"
+                  style={{
+                    backgroundPosition: item.image_position,
+                    backgroundImage: item.image_url ? `url("${item.image_url}")` : undefined,
+                    backgroundSize: item.image_url ? 'cover' : undefined,
+                  }}
+                />
+              )}
               <div className="p-5">
                 <span className="text-xs font-bold text-[#1f6f5c]">
                   {item.category_name}
@@ -324,7 +489,7 @@ function Store({
         </div>
         {!products.length && (
           <p className="py-12 text-center text-[#71675c]">
-            کالایی مطابق جست‌وجوی شما پیدا نشد.
+            {recommendedIds !== null ? 'فعلاً کالای مناسبی در این پیشنهاد پیدا نشد.' : 'کالایی مطابق جست‌وجوی شما پیدا نشد.'}
           </p>
         )}
       </section>
@@ -362,11 +527,21 @@ function Auth({ onSuccess }: { onSuccess: (user: User) => void }) {
         <SheetHeader>
           <SheetTitle>حساب همه‌چی</SheetTitle>
         </SheetHeader>
-        <Tabs defaultValue="login" className="mt-6">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="login">ورود</TabsTrigger>
+        <Tabs defaultValue="sms" className="mt-6">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="sms">ورود با پیامک</TabsTrigger>
+            <TabsTrigger value="login">ورود با ایمیل</TabsTrigger>
             <TabsTrigger value="register">ثبت‌نام</TabsTrigger>
           </TabsList>
+          <TabsContent value="sms">
+            <SmsLogin
+              onError={setError}
+              onSuccess={(u) => {
+                onSuccess(u);
+                setOpen(false);
+              }}
+            />
+          </TabsContent>
           <TabsContent value="login">
             <form
               className="space-y-3 pt-5"
@@ -426,6 +601,121 @@ function Auth({ onSuccess }: { onSuccess: (user: User) => void }) {
         {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
       </SheetContent>
     </Sheet>
+  );
+}
+
+function SmsLogin({
+  onSuccess,
+  onError,
+}: {
+  onSuccess: (user: User) => void;
+  onError: (message: string) => void;
+}) {
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
+  const run = async (task: () => Promise<void>) => {
+    setBusy(true);
+    onError('');
+    try {
+      await task();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'خطا');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const sendCode = () =>
+    run(async () => {
+      const data = await request<{ resendIn: number }>('/api/auth/otp/request', {
+        method: 'POST',
+        body: JSON.stringify({ phone }),
+      });
+      setSent(true);
+      setCode('');
+      setCooldown(data.resendIn);
+    });
+  const verify = () =>
+    run(async () => {
+      const data = await request<{ user: User }>('/api/auth/otp/verify', {
+        method: 'POST',
+        body: JSON.stringify({ phone, code }),
+      });
+      onSuccess(data.user);
+    });
+  return (
+    <form
+      className="space-y-3 pt-5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void (sent ? verify() : sendCode());
+      }}
+    >
+      <Input
+        dir="ltr"
+        inputMode="tel"
+        autoComplete="tel"
+        placeholder="شماره موبایل، مثل 09121234567"
+        value={phone}
+        disabled={sent}
+        onChange={(e) => setPhone(e.target.value)}
+        required
+      />
+      {sent && (
+        <>
+          <p className="text-xs leading-6 text-muted-foreground">
+            کد ۶ رقمی به شمارهٔ بالا پیامک شد.
+          </p>
+          <Input
+            dir="ltr"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            placeholder="کد تأیید"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            required
+          />
+        </>
+      )}
+      <Button className="w-full" type="submit" disabled={busy}>
+        {sent ? 'ورود' : 'ارسال کد'}
+      </Button>
+      {sent && (
+        <div className="flex justify-between text-xs">
+          <button
+            type="button"
+            className="underline disabled:no-underline disabled:opacity-60"
+            disabled={busy || cooldown > 0}
+            onClick={() => void sendCode()}
+          >
+            {cooldown > 0
+              ? `ارسال دوباره تا ${persian.format(cooldown)} ثانیه دیگر`
+              : 'ارسال دوباره کد'}
+          </button>
+          <button
+            type="button"
+            className="underline"
+            onClick={() => {
+              setSent(false);
+              setCode('');
+            }}
+          >
+            تغییر شماره
+          </button>
+        </div>
+      )}
+      <p className="text-xs leading-6 text-muted-foreground">
+        اگر حساب نداشته باشید، با اولین ورود خودکار ساخته می‌شود.
+      </p>
+    </form>
   );
 }
 

@@ -13,6 +13,7 @@ type Product = {
   stock: number;
   attributes: string;
   category_name: string;
+  image_url: string | null;
 };
 type Variant = {
   id: string;
@@ -22,6 +23,14 @@ type Variant = {
   stock: number;
 };
 const digits = new Intl.NumberFormat('fa-IR');
+const individualPhotos = new Set([
+  '/product-images/shirt-men.jpg',
+  '/product-images/trousers-men.jpg',
+  '/product-images/belt-men.jpg',
+  '/product-images/tie-men.jpg',
+  '/product-images/shoes-unisex.jpg',
+  '/product-images/socks-unisex.jpg',
+]);
 
 export default function ProductPage() {
   const [product, setProduct] = useState<Product | null>(null);
@@ -78,7 +87,22 @@ export default function ProductPage() {
       className="min-h-screen bg-[#faf6ef] p-4 text-[#1b1815] md:p-10"
     >
       <article className="mx-auto grid max-w-5xl gap-8 rounded-3xl border bg-white p-6 md:grid-cols-2 md:p-10">
-        <div className="min-h-80 rounded-2xl bg-gradient-to-bl from-[#dcebe4] via-[#f4d7ba] to-[#e8a33d]" />
+        <div>
+          {product.image_url && individualPhotos.has(product.image_url) ? (
+            <img src={product.image_url} alt={product.title} className="h-80 w-full rounded-2xl bg-[#f8f7f4] object-contain" />
+          ) : (
+            <div
+              className="min-h-80 rounded-2xl bg-gradient-to-bl from-[#dcebe4] via-[#f4d7ba] to-[#e8a33d] bg-cover bg-center"
+              style={product.image_url ? { backgroundImage: `url("${product.image_url}")` } : undefined}
+            />
+          )}
+          {product.image_url && individualPhotos.has(product.image_url) && (
+            <p className="mt-2 text-xs text-[#71675c]">عکس نمایشیِ نوع کالا است، نه عکس کالای انبارشده.</p>
+          )}
+          {product.id === 'p-belt-men' && (
+            <p className="mt-1 text-xs text-[#71675c]">عکس: <a href="https://commons.wikimedia.org/wiki/File:Leather_Belt.jpg" target="_blank" rel="noopener noreferrer" className="underline">Angelsharum</a>، <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener noreferrer" className="underline">CC BY-SA 3.0</a></p>
+          )}
+        </div>
         <div>
           <Link href="/" className="text-sm text-[#1f6f5c] underline">
             بازگشت به فروشگاه
@@ -127,8 +151,16 @@ export default function ProductPage() {
           <p className="mt-2 text-sm text-[#71675c]">
             {digits.format(stock)} عدد موجود
           </p>
-          <Button className="mt-5" disabled={stock < 1} onClick={() => window.location.assign('/')}>
-            <ShoppingCart /> افزودن به سبد از ویترین
+          <Button
+            className="mt-5"
+            disabled={stock < 1}
+            onClick={() =>
+              window.location.assign(
+                `/?add=${encodeURIComponent(product.id)}`,
+              )
+            }
+          >
+            <ShoppingCart /> افزودن به سبد
           </Button>
         </div>
       </article>

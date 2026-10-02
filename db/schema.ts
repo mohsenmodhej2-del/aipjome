@@ -152,3 +152,11 @@ export const rateLimits = sqliteTable('rate_limits', {
   count: integer('count').notNull().default(0),
   resetAt: text('reset_at').notNull(),
 });
+
+export const otpCodes = sqliteTable('otp_codes', {
+  phone: text('phone').primaryKey(),
+  codeHash: text('code_hash').notNull(),
+  expiresAt: text('expires_at').notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  sentAt: text('sent_at').notNull(),
+});
